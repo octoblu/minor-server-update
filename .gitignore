@@ -22,3 +22,5 @@ _testmain.go
 *.exe
 *.test
 *.prof
+minor-server-update
+entrypoint/minor-server-update
