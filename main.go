@@ -4,13 +4,11 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/signal"
-	"syscall"
-	"time"
 
 	"github.com/codegangsta/cli"
 	"github.com/coreos/go-semver/semver"
 	"github.com/fatih/color"
+	"github.com/octoblu/minor-server-update/vctlsync"
 	De "github.com/tj/go-debug"
 )
 
@@ -23,52 +21,47 @@ func main() {
 	app.Action = run
 	app.Flags = []cli.Flag{
 		cli.StringFlag{
-			Name:   "example, e",
-			EnvVar: "MINOR_SERVER_UPDATE_EXAMPLE",
-			Usage:  "Example string flag",
+			Name:   "etcd-uri",
+			EnvVar: "MINOR_SERVER_UPDATE_ETCD_URI",
+			Usage:  "Etcd URI that vulcan uses. Will only be used for read-only activity",
+		},
+		cli.StringFlag{
+			Name:   "vulcand-uri",
+			EnvVar: "MINOR_SERVER_UPDATE_VULCAND_URI",
+			Usage:  "Vulcand URI where vulcan's API is available. Will only be used all write activity",
 		},
 	}
 	app.Run(os.Args)
 }
 
 func run(context *cli.Context) {
-	example := getOpts(context)
+	etcdURI, vulcandURI := getOpts(context)
 
-	sigTerm := make(chan os.Signal)
-	signal.Notify(sigTerm, syscall.SIGTERM)
-
-	sigTermReceived := false
-
-	go func() {
-		<-sigTerm
-		fmt.Println("SIGTERM received, waiting to exit")
-		sigTermReceived = true
-	}()
-
-	for {
-		if sigTermReceived {
-			fmt.Println("I'll be back.")
-			os.Exit(0)
-		}
-
-		debug("minor-server-update.loop: %v", example)
-		time.Sleep(1 * time.Second)
+	vctlSync := vctlsync.New(etcdURI, vulcandURI)
+	err := vctlSync.Run()
+	if err != nil {
+		log.Fatalln("error on vctlSync.Run", err.Error())
 	}
+	os.Exit(0)
 }
 
-func getOpts(context *cli.Context) string {
-	example := context.String("example")
+func getOpts(context *cli.Context) (string, string) {
+	etcdURI := context.String("etcd-uri")
+	vulcandURI := context.String("vulcand-uri")
 
-	if example == "" {
+	if etcdURI == "" || vulcandURI == "" {
 		cli.ShowAppHelp(context)
 
-		if example == "" {
-			color.Red("  Missing required flag --example or MINOR_SERVER_UPDATE_EXAMPLE")
+		if etcdURI == "" {
+			color.Red("  Missing required flag --etcd-uri or MINOR_SERVER_UPDATE_ETCD_URI")
+		}
+		if vulcandURI == "" {
+			color.Red("  Missing required flag --vulcand-uri or MINOR_SERVER_UPDATE_VULCAND_URI")
 		}
 		os.Exit(1)
 	}
 
-	return example
+	return etcdURI, vulcandURI
 }
 
 func version() string {
