@@ -34,7 +34,30 @@ func New(etcdURI, vulcandURI string) *Client {
 // of whaver server just changed
 type OnServerCallback func(backendID, serverID string)
 
-// ForEachMinorServer calls the function for each minor server
+// ForEachMinorBackendServer calls the onServer callback for each minor server
+// already registered to a minor backend
+func (client *Client) ForEachMinorBackendServer(onServer OnServerCallback) error {
+	etcdClient, err := etcdclient.Dial(client.etcdURI)
+	panicOnError("etcdclient.Dial failed", err)
+
+	keys, err := etcdClient.LsRecursive("/vulcand/backends")
+	if err != nil {
+		return err
+	}
+
+	for _, key := range keys {
+		if !isMinorBackendKey(key) {
+			continue
+		}
+
+		backendID := parseBackendID(key)
+		serverID := parseServerID(key)
+		onServer(backendID, serverID)
+	}
+	return nil
+}
+
+// ForEachMinorServer calls the onServer callback for each minor server
 // registered to vulcand
 func (client *Client) ForEachMinorServer(onServer OnServerCallback) error {
 	etcdClient, err := etcdclient.Dial(client.etcdURI)
@@ -102,6 +125,20 @@ func (client *Client) RegisterServerWithMinor(backendID, serverID string) {
 	panicOnError("upsertBackend failed", err)
 	err = client.upsertServer(backendMinorID, serverID, url)
 	panicOnError("upsertServer failed", err)
+}
+
+// RemoveServerIfNescessary checks to see if a server is present on
+// the non-minor backend and removes it if it is not
+func (client *Client) RemoveServerIfNescessary(backendID, serverID string) {
+	// octoblu-sms-service-minor -> octoblu-sms-service
+	nonMinorBackendID := regexp.MustCompile("-minor$").ReplaceAllString(backendID, "")
+
+	nonMinorURL := client.getServerURL(nonMinorBackendID, serverID)
+	if nonMinorURL != "" {
+		return
+	}
+
+	client.deleteServer(backendID, serverID)
 }
 
 func (client *Client) getServerURL(backendID, serverID string) string {

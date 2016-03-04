@@ -19,6 +19,15 @@ func New(etcdURI, vulcandURI string) *Synchronizer {
 func (synchronizer *Synchronizer) Run() error {
 	vctlClient := synchronizer.vctlClient
 
-	vctlClient.ForEachMinorServer(vctlClient.RegisterServerWithMinor)
+	err := vctlClient.ForEachMinorBackendServer(vctlClient.RemoveServerIfNescessary)
+	if err != nil {
+		return err
+	}
+
+	err = vctlClient.ForEachMinorServer(vctlClient.RegisterServerWithMinor)
+	if err != nil {
+		return err
+	}
+
 	return vctlClient.OnMinorServerChange(vctlClient.RegisterServerWithMinor)
 }
