@@ -30,33 +30,46 @@ func New(etcdURI, vulcandURI string) *Client {
 	return &Client{etcdURI, vulcandURI}
 }
 
-// OnServerChangeCallback is called with the backendID and serverID
+// OnServerCallback is called with the backendID and serverID
 // of whaver server just changed
-type OnServerChangeCallback func(backendID, serverID string)
+type OnServerCallback func(backendID, serverID string)
 
-// OnMinorServerChange calls the function whenever something a server
-// is added/removed/modified, but only if that server's cluster name
-// is minor
-func (client *Client) OnMinorServerChange(onServerChange OnServerChangeCallback) error {
-	debug("OnMinorServerChange")
-
+// ForEachMinorServer calls the function for each minor server
+// registered to vulcand
+func (client *Client) ForEachMinorServer(onServer OnServerCallback) error {
 	etcdClient, err := etcdclient.Dial(client.etcdURI)
 	panicOnError("etcdclient.Dial failed", err)
 
+	keys, err := etcdClient.LsRecursive("/vulcand/backends")
+	if err != nil {
+		return err
+	}
+
+	for _, key := range keys {
+		if !isValidMinorServerKey(key) {
+			continue
+		}
+
+		backendID := parseBackendID(key)
+		serverID := parseServerID(key)
+		onServer(backendID, serverID)
+	}
+	return nil
+}
+
+// OnMinorServerChange calls the function whenever something a server
+// is added/removed/modified, but only if that server's cluster name
+// is minor. This function only returns on error
+func (client *Client) OnMinorServerChange(onServerChange OnServerCallback) error {
+	etcdClient, err := etcdclient.Dial(client.etcdURI)
+	if err != nil {
+		return err
+	}
+
 	return etcdClient.WatchRecursive("/vulcand/backends", func(key, value string) {
 		debug("something happened")
-		if !isEtcdServerKey(key) {
-			debug(`Key doesn't look like an etcd server. Skipping. "%v"`, key)
-			return
-		}
-
-		if !isMinorServerKey(key) {
-			debug(`Key doesn't look like a minor server. Skipping. "%v"`, key)
-			return
-		}
-
-		if isMinorBackendKey(key) {
-			debug(`Key looks like it belongs to a minor backend. Skipping. "%v"`, key)
+		if !isValidMinorServerKey(key) {
+			debug(`Key doesn't look like a valid minor server. Skipping. "%v"`, key)
 			return
 		}
 
@@ -179,6 +192,26 @@ func isMinorBackendKey(key string) bool {
 
 func isMinorServerKey(key string) bool {
 	return etcdMinorServerKeyRegexp.MatchString(key)
+}
+
+func isValidMinorServerKey(key string) bool {
+	if !isEtcdServerKey(key) {
+		debug(`Key doesn't look like an etcd server. "%v"`, key)
+		return false
+	}
+
+	if !isMinorServerKey(key) {
+		debug(`Key doesn't look like a minor server. "%v"`, key)
+		return false
+	}
+
+	if isMinorBackendKey(key) {
+		debug(`Key looks like it belongs to a minor backend. "%v"`, key)
+		return false
+	}
+
+	debug(`key is a valid minor server key. "%v"`, key)
+	return true
 }
 
 // parseBackendID expects key to match the correct format as

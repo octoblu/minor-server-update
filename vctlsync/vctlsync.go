@@ -18,5 +18,7 @@ func New(etcdURI, vulcandURI string) *Synchronizer {
 // Stop is called
 func (synchronizer *Synchronizer) Run() error {
 	vctlClient := synchronizer.vctlClient
+
+	vctlClient.ForEachMinorServer(vctlClient.RegisterServerWithMinor)
 	return vctlClient.OnMinorServerChange(vctlClient.RegisterServerWithMinor)
 }
