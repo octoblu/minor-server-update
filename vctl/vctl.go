@@ -25,7 +25,6 @@ type Client struct {
 
 // New constructs a new vctl Client instance
 func New(etcdURI, vulcandURI string) *Client {
-	fmt.Println("New", etcdURI, vulcandURI)
 	debug(`New("%v", "%v")`, etcdURI, vulcandURI)
 	return &Client{etcdURI, vulcandURI}
 }
