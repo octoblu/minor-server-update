@@ -5,3 +5,4 @@ github.com/octoblu/go-simple-etcd-client/etcdclient v2.7.1
 github.com/onsi/ginkgo/ginkgo
 github.com/onsi/gomega
 github.com/tj/go-debug
+github.com/vulcand/vulcand/engine 475540bb016702d5b7cc4674e37f48ee3e144a69
